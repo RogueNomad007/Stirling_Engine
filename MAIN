@@ -1,0 +1,147 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Default atmospheric compositions for different planets (in percentages)
+default_atmospheres = {
+    'Earth': {'N2': 78, 'O2': 21, 'Ar': 1},
+    'Mars': {'CO2': 95.3, 'N2': 2.7, 'Ar': 1.6, 'O2': 0.13},
+    'KELT-9b': {'H': 50, 'H2': 50},
+    'Uranus': {'H2': 84.5, 'He': 15.5},
+    # used to have NH4, but b/c it has no constant gamma value, I split the 2.3% into both H2 and He
+    'BD+60°2522': {'H': 95, 'He': 5}
+}
+
+# Gamma values for different gases
+gamma_values = {
+    'N2': 1.4,  # Nitrogen
+    'O2': 1.4,  # Oxygen
+    'CO2': 1.29,  # Carbon Dioxide
+    'Ar': 1.67,  # Argon
+    'H': 1.41,  # Hydrogen
+    'H2': 1.41,  # Hydrogen (diatomic)
+    'He': 1.66,  # Helium
+    'NH4': None  # Ammonia (NH4 is not a single gas, and its specific heat ratio is not a constant value)
+}
+
+
+def calculate_effective_gamma(atmosphere):
+    gamma_effective = 0
+    for gas, percentage in atmosphere.items():
+        if gas in gamma_values:
+            gamma_effective += gamma_values[gas] * (percentage / 100)
+    return gamma_effective
+
+
+def calculate_lambda(atmosphere, Th, Tc):
+    gamma_effective = calculate_effective_gamma(atmosphere)
+    return Th / Tc * np.exp((gamma_effective - 1) / gamma_effective)
+
+
+def variable_heat_input_model(distance_from_sun):
+    # Adjustable constant that can be optimized to better represent the true relationship between the variables
+    constant = 1.0
+    heat_input = constant / (distance_from_sun ** 2)
+    return heat_input
+
+
+def check_input_parameters(Th, Tc, distance_from_sun):
+    if Th <= Tc:
+        raise ValueError("Temperature of the hot reservoir must be greater than the cold reservoir.")
+    if distance_from_sun <= 0:
+        raise ValueError("Distance from the sun cannot be negative or equal to zero.")
+
+
+def calculate_efficiency(Th, Tc, gamma):
+    if Th <= Tc:
+        raise ValueError("Temperature of the hot reservoir must be greater than the cold reservoir.")
+    return 1 - (Tc / Th) ** ((gamma - 1) / gamma)
+
+
+def calculate_power_output(efficiency, heat_input):
+    return efficiency * heat_input
+
+
+def find_optimal_temperatures(atmosphere):
+    # The following assumes that the optimal Th is the highest temperature gas and optimal Tc is the lowest temperature gas
+    gases = list(atmosphere.keys())
+    optimal_Th = max(gamma_values[gas] for gas in gases)
+    optimal_Tc = min(gamma_values[gas] for gas in gases)
+    return optimal_Th, optimal_Tc
+
+
+def user_interface():
+    print("Stirling Engine Performance Model - Planetary Conditions")
+    planet_name = input("Enter the name of the planet: ")
+    Th = float(input("Enter the temperature of the hot reservoir (in Kelvin): "))
+    Tc = float(input("Enter the temperature of the cold reservoir (in Kelvin): "))
+    distance_from_sun = float(input("Enter the distance from the sun (in astronomical units): "))
+
+    try:
+        # Checking input parameters
+        check_input_parameters(Th, Tc, distance_from_sun)
+
+        # Getting the atmospheric composition for the entered planet
+        atmosphere = default_atmospheres.get(planet_name, {})
+
+        # Calculating lambda, efficiency, and power output
+        lambd = calculate_lambda(atmosphere, Th, Tc)
+        efficiency = calculate_efficiency(Th, Tc, calculate_effective_gamma(atmosphere))
+        power_output = calculate_power_output(efficiency, variable_heat_input_model(distance_from_sun))
+
+        # Printing results
+        print(f"\nResults for {planet_name}:")
+        print(f"Lambda: {lambd:.2f}")
+        print(f"Efficiency: {efficiency * 100:.2f}%")
+        print(f"Power Output: {power_output:.2f}W")
+
+    except ValueError as e:
+        print(f"Error: {e}")
+
+
+def plot_efficiency_and_power(atmosphere, Th_range, Tc_range):
+    efficiency_values = [calculate_efficiency(Th, Tc, calculate_effective_gamma(atmosphere)) for Th in Th_range for Tc
+                         in Tc_range]
+    power_values = [calculate_power_output(efficiency, variable_heat_input_model(1.0)) for efficiency in
+                    efficiency_values]
+
+    # Plotting
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+
+    # Efficiency plot
+    ax1.scatter(efficiency_values, power_values, c='r', marker='o')
+    ax1.set_xlabel('Efficiency')
+    ax1.set_ylabel('Power Output (W)')
+    ax1.set_title('Efficiency vs. Power Output')
+
+    # Power output plot
+    ax2.scatter(power_values, efficiency_values, c='b', marker='x')
+    ax2.set_xlabel('Power Output (W)')
+    ax2.set_ylabel('Efficiency')
+    ax2.set_title('Power Output vs. Efficiency')
+
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    # Example of how to use the user interface
+    user_interface()
+
+    # Example of how to use the efficiency and power output plot
+    Th_values = np.linspace(600, 800, 5)
+    Tc_values = np.linspace(200, 400, 5)
+    plot_efficiency_and_power(default_atmospheres['Earth'], Th_values, Tc_values)
+
+# findings along the way
+# had to use Lambd as a variable instead of Lambda b/c Lambda is a function in one of the libraries, probably numpy
+# most of my GPT help was with the tuple-ing and the user_interface function
+# issues with matplotlib, but looked at library and figured it out... eventually
+# Had issues implementing both the library and user input, but think I figured it out
+# I completed all of the scavenger hunt except the Archivist, QAE, and both bonuses.
+# easiest - probably adding more planets
+# hardest - definitely creating the UI
+# While I have not seen bugs, I believe that there is a HIGH probability of them because of the size and complexity of the code
+# overall, I had fun on most of it, except for the UI and matplotlib, I learnt how to more effectively use matplotlib, tuples, and other functions
+
+
+
